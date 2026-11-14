@@ -8,10 +8,10 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { GoogleGenAI, Type } from '@google/genai';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getAuth, type DecodedIdToken } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, type DocumentData } from 'firebase-admin/firestore';
 import { createServer as createViteServer } from 'vite';
 import firebaseConfig from './firebase-applet-config.json' with { type: 'json' };
-import { DEFAULT_PRICING_PACKAGES } from './src/lib/rwandaData.ts';
+import { DEFAULT_PRICING_PACKAGES, SEED_COMPANIES, SEED_JOBS } from './src/lib/rwandaData.ts';
 import { JobIngestionEngine } from './server/jobIngestion.ts';
 import type { JobListing, PaymentRecord } from './src/types.ts';
 
@@ -32,11 +32,16 @@ const adminDb = getFirestore(adminApp, firebaseConfig.firestoreDatabaseId);
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
   httpOptions: {
+    timeout: 30_000,
     headers: {
       'User-Agent': 'aistudio-build',
     },
   },
 });
+
+// Gemini model is configurable so a renamed/retired preview model does not
+// take down every AI endpoint. `gemini-2.5-flash` is the supported default.
+const GEMINI_MODEL = (process.env.GEMINI_MODEL || 'gemini-2.5-flash').trim();
 
 function isConfiguredSecret(value: string): boolean {
   const trimmed = value.trim();
@@ -62,6 +67,12 @@ const MOMO_CALLBACK_SECRET = process.env.MTN_MOMO_CALLBACK_SECRET || 'dev-sandbo
 const hasLiveMomoCredentials = Boolean(MOMO_SUB_KEY && MOMO_API_USER && MOMO_API_KEY);
 const hasConfiguredGeminiKey = isConfiguredSecret(process.env.GEMINI_API_KEY || '');
 
+// Sandbox payment simulation finalizes payments without contacting MTN. It is
+// only allowed outside production, or when explicitly opted in. Production
+// without live credentials must never mark a payment as successful.
+const allowSandboxPaymentSimulation =
+  process.env.ALLOW_SANDBOX_PAYMENT_SIMULATION === 'true' || process.env.NODE_ENV !== 'production';
+
 function parseAiJson<T>(rawText: string | undefined, fallback: T): T {
   const cleaned = String(rawText || '')
     .trim()
@@ -70,6 +81,21 @@ function parseAiJson<T>(rawText: string | undefined, fallback: T): T {
     .trim();
   if (!cleaned) return fallback;
   return JSON.parse(cleaned) as T;
+}
+
+function sendAiError(res: express.Response, err: unknown, fallbackMessage: string) {
+  const detail = err instanceof Error ? err.message : String(err);
+  if (/429|RESOURCE_EXHAUSTED|quota|rate.?limit/i.test(detail)) {
+    return res.status(429).json({
+      error: 'Serivisi ya AI irahuze ubu. Tegereza akanya gato wongere ugerageze.',
+    });
+  }
+  if (/timeout|ETIMEDOUT|aborted|AbortError/i.test(detail)) {
+    return res.status(504).json({
+      error: 'Serivisi ya AI yatwara igihe kinini. Ongera ugerageze.',
+    });
+  }
+  return res.status(500).json({ error: fallbackMessage });
 }
 
 const newsletterSubscribers = new Map<string, { name: string; email: string; subscribedAt: string }>();
@@ -301,23 +327,81 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-app.post('/api/bootstrap', rateLimit(30), (_req, res) => {
-  res.json({ ok: true });
+app.post('/api/bootstrap', rateLimit(10), async (_req, res) => {
+  // Public, idempotent seeding of the fixed public catalog. It never overwrites
+  // existing documents, so it is safe to call from a fresh static frontend that
+  // has not been provisioned yet.
+  const seeded = await seedInitialData();
+  if (seeded.error) {
+    return res.status(503).json({ ok: false, seeded });
+  }
+  res.json({ ok: true, seeded });
 });
+
+/**
+ * Idempotently inserts the public Rwanda catalog (pricing, verified companies,
+ * and seed vacancies) using the Admin SDK. Never overwrites an existing doc so
+ * user/admin edits are preserved.
+ */
+async function upsertSeedDoc<T extends object>(
+  collectionName: string,
+  id: string,
+  data: T
+): Promise<boolean> {
+  const ref = adminDb.collection(collectionName).doc(id);
+  const snap = await ref.get();
+  if (snap.exists) return false;
+  await ref.set(data as DocumentData);
+  return true;
+}
+
+async function seedInitialData(): Promise<{
+  pricing: number;
+  companies: number;
+  jobs: number;
+  error: string | null;
+}> {
+  const result = { pricing: 0, companies: 0, jobs: 0, error: null as string | null };
+  try {
+    for (const pkg of DEFAULT_PRICING_PACKAGES) {
+      if (await upsertSeedDoc('pricing_config', pkg.id, pkg)) result.pricing += 1;
+    }
+    for (const comp of SEED_COMPANIES) {
+      if (await upsertSeedDoc('companies', comp.id, comp)) result.companies += 1;
+    }
+    for (const job of SEED_JOBS) {
+      if (await upsertSeedDoc('jobs', job.id, job)) result.jobs += 1;
+    }
+  } catch (err) {
+    result.error = err instanceof Error ? err.message : String(err);
+    console.warn('Initial Firestore seed skipped (Admin SDK/ADC unavailable):', result.error);
+  }
+  return result;
+}
 
 app.post('/api/seed', requireAuth, async (req: AuthenticatedRequest, res) => {
   const adminAllowed = await isAdminUser(req.user!);
   if (!adminAllowed) {
     return res.status(403).json({ error: 'Forbidden: Admin privileges required.' });
   }
+  const seeded = await seedInitialData();
   await writeAuditLog(
     req.user!.uid,
     'seed_initial_data',
     'system',
     'bootstrap',
-    'Triggered initial Rwanda packages, companies, and vacancies seed.'
+    `Seeded pricing=${seeded.pricing}, companies=${seeded.companies}, jobs=${seeded.jobs}.${
+      seeded.error ? ` Error: ${seeded.error}` : ''
+    }`
   );
-  res.json({ ok: true, message: 'Initial Rwanda data verified and seeded.' });
+  if (seeded.error) {
+    return res.status(503).json({
+      error: 'Seeding could not reach Firestore with Admin credentials.',
+      detail: seeded.error,
+      seeded,
+    });
+  }
+  res.json({ ok: true, message: 'Initial Rwanda data verified and seeded.', seeded });
 });
 
 const ingestionEngine = new JobIngestionEngine();
@@ -384,6 +468,85 @@ app.post('/api/realtime/broadcast', requireAuth, rateLimit(40), (req: Authentica
   res.json({ ok: true });
 });
 
+app.post('/api/applications/notify', requireAuth, rateLimit(30), async (req: AuthenticatedRequest, res) => {
+  const { applicationId } = req.body || {};
+  if (!applicationId || typeof applicationId !== 'string') {
+    return res.status(400).json({ error: 'applicationId is required.' });
+  }
+  const appRef = adminDb.collection('applications').doc(applicationId);
+  try {
+    const appSnap = await appRef.get();
+    if (!appSnap.exists) {
+      return res.status(404).json({ error: 'Application not found.' });
+    }
+    const appData = appSnap.data() || {};
+    if (appData.candidateId !== req.user!.uid) {
+      return res.status(403).json({ error: 'Forbidden: This application belongs to another candidate.' });
+    }
+
+    const now = new Date().toISOString();
+    // Claim the side effects atomically so a retried/duplicated request cannot
+    // increment applicationsCount or create a second employer notification.
+    const claimed = await adminDb.runTransaction(async (tx) => {
+      const fresh = await tx.get(appRef);
+      if (!fresh.exists) return false;
+      if ((fresh.data() || {}).notifyProcessed === true) return false;
+      tx.update(appRef, { notifyProcessed: true, notifyProcessedAt: now });
+      return true;
+    });
+    if (!claimed) {
+      return res.json({ ok: true, duplicate: true });
+    }
+
+    let jobFound = false;
+    if (appData.jobId) {
+      const jobRef = adminDb.collection('jobs').doc(String(appData.jobId));
+      const jobSnap = await jobRef.get();
+      if (jobSnap.exists) {
+        jobFound = true;
+        await jobRef.update({
+          applicationsCount: FieldValue.increment(1),
+          updatedAt: now,
+        });
+      }
+    }
+
+    if (appData.employerOwnerId) {
+      const notifId = `notif_${applicationId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 120)}`;
+      await adminDb.collection('notifications').doc(notifId).set({
+        id: notifId,
+        userId: appData.employerOwnerId,
+        type: 'application',
+        title: 'Dosiye Nshya Yatanzwe',
+        message: `${appData.candidateName || 'Umukandida'} yatanze dosiye ku mwanya "${appData.jobTitle || ''}".`,
+        read: false,
+        linkTab: 'employer',
+        createdAt: now,
+      });
+    }
+
+    await writeAuditLog(
+      req.user!.uid,
+      'application_submitted',
+      'application',
+      applicationId,
+      `Application for job ${String(appData.jobId || 'unknown')} submitted by candidate.`
+    );
+
+    broadcastRealtimeEvent('application:created', {
+      applicationId,
+      jobId: appData.jobId,
+      jobTitle: appData.jobTitle,
+      companyName: appData.companyName,
+    });
+
+    res.json({ ok: true, jobFound });
+  } catch (err) {
+    console.error('Application notify error:', err);
+    res.status(500).json({ error: 'Failed to update application side effects.' });
+  }
+});
+
 app.post('/api/newsletter/subscribe', rateLimit(15), (req, res) => {
   const { name, email } = req.body || {};
   const cleanEmail = String(email || '').trim().toLowerCase().slice(0, 254);
@@ -420,7 +583,7 @@ app.post('/api/ai/job-match', requireAuth, rateLimit(20), async (req: Authentica
     const targetLang = getLanguageName(language);
 
     const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+      model: GEMINI_MODEL,
       contents: `Analyze this candidate CV against the target job in Rwanda.
 Target Language for ALL output strings: ${targetLang}.
 
@@ -473,7 +636,7 @@ Respond strictly in ${targetLang}.`,
     });
   } catch (err) {
     console.error('Gemini job-match error:', err);
-    res.status(500).json({ error: 'Isuzuma rya AI ryagize ikibazo. Ongera ugerageze.' });
+    return sendAiError(res, err, 'Isuzuma rya AI ryagize ikibazo. Ongera ugerageze.');
   }
 });
 
@@ -491,7 +654,7 @@ app.post('/api/ai/improve-cv', requireAuth, rateLimit(20), async (req: Authentic
     const targetLang = getLanguageName(language);
 
     const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+      model: GEMINI_MODEL,
       contents: `Improve the clarity, professional tone, and ATS keyword structure of this CV without adding ANY fabricated skills, roles, metrics, or credentials.
 Output Language: ${targetLang}
 
@@ -526,7 +689,7 @@ NEVER invent fake jobs, dates, metrics, or qualifications. Only polish grammar, 
     });
   } catch (err) {
     console.error('Gemini improve-cv error:', err);
-    res.status(500).json({ error: 'Kunoza CV na AI byagize ikibazo.' });
+    return sendAiError(res, err, 'Kunoza CV na AI byagize ikibazo.');
   }
 });
 
@@ -544,7 +707,7 @@ app.post('/api/ai/cover-letter', requireAuth, rateLimit(20), async (req: Authent
     const targetLang = getLanguageName(language);
 
     const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+      model: GEMINI_MODEL,
       contents: `Write a tailored, honest cover letter for:
 JOB TITLE: ${String(jobTitle).slice(0, 200)}
 COMPANY: ${String(companyName || '').slice(0, 160)}
@@ -568,7 +731,7 @@ Language: ${targetLang}`,
     res.json({ coverLetter: String(parsed.coverLetter || '') });
   } catch (err) {
     console.error('Gemini cover-letter error:', err);
-    res.status(500).json({ error: 'Gutegura ibaruwa isaba akazi byagize ikibazo.' });
+    return sendAiError(res, err, 'Gutegura ibaruwa isaba akazi byagize ikibazo.');
   }
 });
 
@@ -586,7 +749,7 @@ app.post('/api/ai/interview-prep', requireAuth, rateLimit(20), async (req: Authe
     const targetLang = getLanguageName(language);
 
     const response = await ai.models.generateContent({
-      model: 'gemini-4-hydrogen',
+      model: GEMINI_MODEL,
       contents: `Prepare 5 realistic interview questions and honest answering guidance for:
 JOB TITLE: ${String(jobTitle).slice(0, 200)}
 JOB DESCRIPTION: ${String(jobDescription || '').slice(0, 4000)}
@@ -619,7 +782,7 @@ Language: ${targetLang}`,
     res.json({ items: Array.isArray(parsed.items) ? parsed.items : [] });
   } catch (err) {
     console.error('Gemini interview-prep error:', err);
-    res.status(500).json({ error: 'Gutegura ikiganiro cy\'akazi byagize ikibazo.' });
+    return sendAiError(res, err, 'Gutegura ikiganiro cy\'akazi byagize ikibazo.');
   }
 });
 
@@ -632,6 +795,7 @@ app.get('/api/momo/config', requireAuth, (_req, res) => {
     receiverMsisdn: RECEIVER_MSISDN,
     environment: hasLiveMomoCredentials ? MOMO_TARGET_ENV : 'sandbox',
     credentialsConfigured: hasLiveMomoCredentials,
+    sandboxSimulationAllowed: allowSandboxPaymentSimulation,
     currency: 'RWF',
     merchantOnboardingNotice:
       'Receiving number 0795547233 is configured subject to MTN MoMo Rwanda merchant onboarding approval.',
@@ -912,6 +1076,12 @@ app.get('/api/momo/status/:referenceId', requireAuth, rateLimit(30), async (req:
     }
 
     const simOutcome = req.query.sandboxOutcome;
+    if (simOutcome && !allowSandboxPaymentSimulation) {
+      return res.status(403).json({
+        error:
+          'Sandbox payment simulation is disabled in this environment. Configure real MTN MoMo credentials or enable ALLOW_SANDBOX_PAYMENT_SIMULATION explicitly.',
+      });
+    }
     if (simOutcome === 'SUCCESSFUL') {
       const finalized = await finalizeVerifiedPayment(
         payment,
@@ -1112,6 +1282,10 @@ export class ErrorOverlay {}
   const port = Number(process.env.PORT || 3000);
   server.listen(port, '0.0.0.0', () => {
     console.log(`BonaAkazi.rw server listening on http://0.0.0.0:${port}`);
+    // Persist the public seed catalog so unauthenticated visitors can actually
+    // apply to the demo vacancies (the applications rule requires jobs/{id} to
+    // exist in Firestore).
+    seedInitialData().catch((err) => console.warn('Startup seed error:', err));
     ingestionEngine.startWorker(persistAndBroadcastIngestedJob);
   });
 }

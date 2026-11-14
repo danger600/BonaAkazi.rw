@@ -74,6 +74,16 @@ const AUTH_ERROR_MESSAGES: Record<
   },
 };
 
+export function getAuthHostname(): string {
+  return typeof window !== 'undefined' && window.location?.hostname
+    ? window.location.hostname
+    : 'this domain';
+}
+
+export function isUnauthorizedDomainCode(code: string | null | undefined): boolean {
+  return code === 'auth/unauthorized-domain';
+}
+
 export function extractFirebaseAuthCode(err: unknown): string {
   if (typeof err === 'object' && err !== null && 'code' in err) {
     const code = (err as { code?: unknown }).code;
@@ -89,10 +99,7 @@ export function extractFirebaseAuthCode(err: unknown): string {
 export function mapFirebaseAuthError(err: unknown, lang: LanguageCode = 'rw'): string {
   const code = extractFirebaseAuthCode(err);
   const copy = AUTH_ERROR_MESSAGES[lang] || AUTH_ERROR_MESSAGES.rw;
-  const currentHost =
-    typeof window !== 'undefined' && window.location?.hostname
-      ? window.location.hostname
-      : 'this domain';
+  const currentHost = getAuthHostname();
 
   if (code === 'auth/cancelled-popup-request' || code === 'auth/popup-closed-by-user') {
     return copy.cancelledPopup;

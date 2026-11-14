@@ -79,16 +79,41 @@ export function CvBuilderView() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Browsers cannot reliably extract text from binary PDF/DOCX files with
+    // File.text(); it returns compressed bytes. Only accept plain-text formats
+    // here and tell the user how to import a PDF/DOCX honestly.
+    const extension = file.name.toLowerCase().match(/\.[a-z0-9]+$/)?.[0] || '';
+    if (!['.txt', '.md', '.csv'].includes(extension)) {
+      setStatusMsg(
+        'Dosiye ya PDF cyangwa DOCX ntishobora gusomwa mu buryo bwizewe muri mushakisha. Fungura iyi dosiye, koporora inyandiko, hanyuma uyishyire mu kiganiro cy\'ubunararibonye (cyangwa ubike nka TXT).'
+      );
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setStatusMsg('Dosiye ni nini cyane (irenga 2 MB). Koresha dosiye ntoya cyangwa wandike inyandiko mu CV.');
+      e.target.value = '';
+      return;
+    }
     try {
       const text = await file.text();
-      // Extract clean readable characters for TXT, MD, or text-layer PDF/DOCX uploads
-      const cleaned = text.replace(/[^\x20-\x7E\n\r\t\u00C0-\u024F]/g, ' ').replace(/\s{3,}/g, '\n');
-      setExperienceText((prev) =>
-        (prev ? `${prev}\n\n${cleaned}` : cleaned).slice(0, 8000)
-      );
+      // Keep Latin + Kinyarwanda/French accented characters, drop binary noise.
+      const cleaned = text
+        .replace(/[^\x20-\x7E\n\r\t\u00C0-\u024F]/g, ' ')
+        .replace(/[ \t]{3,}/g, ' ')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+      if (!cleaned) {
+        setStatusMsg('Iyi dosiye nta nyandiko isobanutse irimo.');
+        return;
+      }
+      setExperienceText((prev) => (prev ? `${prev}\n\n${cleaned}` : cleaned).slice(0, 8000));
       setStatusMsg(`Inyandiko ya "${file.name}" yinjijwe mu gice cy'ubunararibonye.`);
     } catch {
       setStatusMsg('Ntibyakunze gusoma iyi dosiye. Koresha TXT cyangwa wandike inyandiko muri CV.');
+    } finally {
+      e.target.value = '';
     }
   };
 
@@ -446,7 +471,7 @@ export function CvBuilderView() {
                 <label className="text-xs text-emerald-600 cursor-pointer inline-flex items-center gap-1 font-medium">
                   <Upload className="w-3.5 h-3.5" />
                   Pakira Dosiye
-                  <input type="file" accept=".txt,.md,.pdf,.docx" onChange={handleFileUpload} className="hidden" />
+                  <input type="file" accept=".txt,.md,.csv" onChange={handleFileUpload} className="hidden" />
                 </label>
               </div>
               <textarea

@@ -24,6 +24,7 @@ export function PricingMomoView({ preselectedPackageId, preselectedTargetId }: P
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [activePayment, setActivePayment] = useState<PaymentRecord | null>(null);
   const [credentialsConfigured, setCredentialsConfigured] = useState(false);
+  const [sandboxSimulationAllowed, setSandboxSimulationAllowed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -50,8 +51,11 @@ export function PricingMomoView({ preselectedPackageId, preselectedTargetId }: P
     checkBackendHealth()
       .then((health) => {
         if (!health.ok) return;
-        apiFetch<{ credentialsConfigured: boolean }>('/api/momo/config')
-          .then((res) => setCredentialsConfigured(res.credentialsConfigured))
+        apiFetch<{ credentialsConfigured: boolean; sandboxSimulationAllowed?: boolean }>('/api/momo/config')
+          .then((res) => {
+            setCredentialsConfigured(res.credentialsConfigured);
+            setSandboxSimulationAllowed(Boolean(res.sandboxSimulationAllowed));
+          })
           .catch(() => {});
 
         apiFetch<{ payments: PaymentRecord[] }>('/api/momo/my-payments')
@@ -308,7 +312,7 @@ export function PricingMomoView({ preselectedPackageId, preselectedTargetId }: P
                       <RefreshCw className="w-3.5 h-3.5" />
                       {t.momo.pollStatusBtn}
                     </button>
-                    {!credentialsConfigured && (
+                    {!credentialsConfigured && sandboxSimulationAllowed && (
                       <>
                         <button
                           type="button"

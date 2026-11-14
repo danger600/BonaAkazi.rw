@@ -32,7 +32,9 @@ export function AiJobMatchView() {
         if (!snap.empty) {
           const list = snap.docs.map((d) => d.data() as JobListing);
           setJobs(list);
-          if (list.length > 0 && !selectedJobId) setSelectedJobId(list[0].id);
+          // Keep the selection valid when the initial SEED_JOBS id is not in
+          // the persisted catalog.
+          setSelectedJobId((prev) => (list.some((j) => j.id === prev) ? prev : list[0].id));
         }
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'jobs')

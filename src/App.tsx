@@ -1,7 +1,8 @@
 import React, { Component, useState } from 'react';
-import { Bell, LogOut, Menu, Moon, Sun, X } from 'lucide-react';
+import { Bell, Check, Copy, ExternalLink, LogOut, Menu, Moon, Sun, X } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
-import { db } from './lib/firebase.ts';
+import { db, firebaseProjectId } from './lib/firebase.ts';
+import { getAuthHostname, isUnauthorizedDomainCode } from './lib/authErrors.ts';
 import { AppProvider, useApp } from './contexts/AppContext.tsx';
 import { getT } from './i18n/translations.ts';
 import { JobBoardView } from './components/JobBoardView.tsx';
@@ -67,10 +68,15 @@ function Shell() {
     signOutUser,
     switchRole,
     authError,
+    authErrorCode,
     clearAuthError,
   } = useApp();
 
   const t = getT(language);
+  const authHostname = getAuthHostname();
+  const isUnauthorizedDomain = isUnauthorizedDomainCode(authErrorCode);
+  const authorizedDomainsUrl = `https://console.firebase.google.com/project/${firebaseProjectId}/authentication/settings`;
+  const [hostCopied, setHostCopied] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [checkoutPkg, setCheckoutPkg] = useState<string | undefined>(undefined);
@@ -85,6 +91,27 @@ function Shell() {
     { id: 'ai_match', label: t.nav.aiMatch },
     { id: 'employer', label: t.nav.employer },
   ];
+
+  const copyAuthHostname = async () => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(authHostname);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = authHostname;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setHostCopied(true);
+      window.setTimeout(() => setHostCopied(false), 2000);
+    } catch {
+      setHostCopied(false);
+    }
+  };
 
   const handleRequestMomoCheckout = (packageId: string, targetJobId: string) => {
     setCheckoutPkg(packageId);
@@ -352,16 +379,43 @@ function Shell() {
         <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 pt-4">
           <div
             role="alert"
-            className="flex items-center justify-between gap-4 p-3.5 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 text-xs font-medium text-amber-900 dark:text-amber-100"
+            className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 text-xs font-medium text-amber-900 dark:text-amber-100"
           >
-            <span>{authError}</span>
-            <button
-              type="button"
-              onClick={clearAuthError}
-              className="text-amber-800 dark:text-amber-200 underline shrink-0"
-            >
-              Funga
-            </button>
+            <span className="flex-1">{authError}</span>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              {isUnauthorizedDomain && (
+                <>
+                  <button
+                    type="button"
+                    onClick={copyAuthHostname}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-amber-400 dark:border-amber-700 px-2.5 py-1 font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/50"
+                  >
+                    {hostCopied ? (
+                      <Check className="w-3.5 h-3.5" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                    {hostCopied ? t.auth.copiedHostname : t.auth.copyHostname}
+                  </button>
+                  <a
+                    href={authorizedDomainsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-2.5 py-1 font-semibold text-white hover:bg-amber-700"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    {t.auth.openAuthorizedDomains}
+                  </a>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={clearAuthError}
+                className="text-amber-800 dark:text-amber-200 underline"
+              >
+                Funga
+              </button>
+            </div>
           </div>
         </div>
       )}

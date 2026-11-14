@@ -34,6 +34,7 @@ export function CandidatePortalView() {
   const [savedJobs, setSavedJobs] = useState<SavedJob[]>([]);
   const [alerts, setAlerts] = useState<JobAlert[]>([]);
   const [savedBanner, setSavedBanner] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Profile state
   const [headline, setHeadline] = useState('');
@@ -112,8 +113,6 @@ export function CandidatePortalView() {
       </div>
     );
   }
-
-  const [actionError, setActionError] = useState<string | null>(null);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();

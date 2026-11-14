@@ -51,6 +51,7 @@ export function JobBoardView() {
   const t = getT(language);
 
   const [firestoreJobs, setFirestoreJobs] = useState<JobListing[]>([]);
+  const [firestoreReady, setFirestoreReady] = useState(false);
   const [firestoreCompanies, setFirestoreCompanies] = useState<Company[]>([]);
   const [ingestedJobs, setIngestedJobs] = useState<JobListing[]>([]);
   const [ingestionStats, setIngestionStats] = useState<IngestionRunStats | null>(null);
@@ -96,13 +97,13 @@ export function JobBoardView() {
     const unsub = onSnapshot(
       q,
       (snap) => {
-        if (!snap.empty) {
-          setFirestoreJobs(snap.docs.map((d) => d.data() as JobListing));
-        }
+        setFirestoreJobs(snap.docs.map((d) => d.data() as JobListing));
+        setFirestoreReady(true);
         setLoading(false);
       },
       (err) => {
         setLoading(false);
+        setFirestoreReady(true);
         setErrorMsg(err.message);
         handleFirestoreError(err, OperationType.LIST, 'jobs');
       }
@@ -144,6 +145,23 @@ export function JobBoardView() {
       active = false;
     };
   }, [liveBanner?.timestamp]);
+
+  // When the Firestore catalog is empty, ask the backend to persist the fixed
+  // public seed catalog. Without persisted jobs the applications rule rejects
+  // every application to a locally-rendered SEED_JOBS entry.
+  useEffect(() => {
+    if (!firestoreReady || firestoreJobs.length > 0) return;
+    let active = true;
+    checkBackendHealth()
+      .then((health) => {
+        if (!active || !health.ok) return;
+        return fetch(resolveApiUrl('/api/bootstrap'), { method: 'POST' });
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [firestoreReady, firestoreJobs.length]);
 
   const jobs = useMemo(() => {
     const base = firestoreJobs.length > 0 ? firestoreJobs : SEED_JOBS;
@@ -315,12 +333,11 @@ export function JobBoardView() {
       });
 
       if (isBackendServerExpected()) {
-        await apiFetch('/api/realtime/broadcast', {
+        // Server-side side effects: increments applicationsCount and notifies
+        // the employer. Both are blocked for regular users by Firestore rules.
+        await apiFetch('/api/applications/notify', {
           method: 'POST',
-          body: JSON.stringify({
-            type: 'application:created',
-            payload: { jobTitle: applyModalJob.title, companyName: applyModalJob.companyName },
-          }),
+          body: JSON.stringify({ applicationId: appId }),
         }).catch(() => {});
       }
 
@@ -328,6 +345,11 @@ export function JobBoardView() {
       setCoverLetter('');
       setFeedbackBanner(`Dosiye yawe kuri "${applyModalJob.title}" yoherejwe neza.`);
     } catch (err) {
+      setFeedbackBanner(
+        err instanceof Error
+          ? `Ntibyakunze kohereza dosiye: ${err.message}`
+          : 'Ntibyakunze kohereza dosiye. Ongera ugerageze.'
+      );
       handleFirestoreError(err, OperationType.CREATE, 'applications');
     } finally {
       setSubmittingApp(false);

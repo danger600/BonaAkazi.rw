@@ -29,7 +29,11 @@ service cloud.firestore {
     function isAdmin() {
       return isVerified() && (
         request.auth.token.email == 'toxiccoderkiller@gmail.com' ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['admin', 'super_admin', 'finance_manager', 'recruitment_officer', 'moderator']
+        )
       );
     }
 
@@ -405,8 +409,10 @@ service cloud.firestore {
     }
 
     match /pricing_config/{packageId} {
-      allow get: if existing().active == true || isAdmin();
-      allow list: if resource.data.active == true || isAdmin();
+      // resource == null keeps existence checks for not-yet-seeded packages from
+      // surfacing as permission-denied during the initial Firestore handshake.
+      allow get: if resource == null || existing().active == true || isAdmin();
+      allow list: if resource == null || resource.data.active == true || isAdmin();
       allow create, update, delete: if isAdmin();
     }
 

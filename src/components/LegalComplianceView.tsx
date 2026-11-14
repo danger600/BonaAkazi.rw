@@ -11,13 +11,19 @@ export function LegalComplianceView() {
 
   const [consentGranted, setConsentGranted] = useState(true);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [privateInfo, setPrivateInfo] = useState<{ phone?: string; district?: string }>({});
 
   useEffect(() => {
     if (!user) return;
     getDoc(doc(db, 'users', user.uid, 'private', 'info'))
       .then((snap) => {
         if (snap.exists()) {
-          setConsentGranted(Boolean(snap.data().consentAccepted));
+          const data = snap.data();
+          setConsentGranted(Boolean(data.consentAccepted));
+          setPrivateInfo({
+            phone: typeof data.phone === 'string' ? data.phone : undefined,
+            district: typeof data.district === 'string' ? data.district : undefined,
+          });
         }
       })
       .catch(() => {});
@@ -34,15 +40,20 @@ export function LegalComplianceView() {
     }
     const next = !consentGranted;
     const now = new Date().toISOString();
+    // Firestore rules require every private-info write to contain the full
+    // valid shape (uid + email + consent fields). Writing only the consent
+    // fields with merge:true created an invalid document on first use and was
+    // rejected with permission-denied.
+    const payload: Record<string, unknown> = {
+      uid: user.uid,
+      email: (user.email || '').slice(0, 254),
+      consentAccepted: next,
+      consentUpdatedAt: now,
+    };
+    if (privateInfo.phone) payload.phone = privateInfo.phone.slice(0, 32);
+    if (privateInfo.district) payload.district = privateInfo.district.slice(0, 64);
     try {
-      await setDoc(
-        doc(db, 'users', user.uid, 'private', 'info'),
-        {
-          consentAccepted: next,
-          consentUpdatedAt: now,
-        },
-        { merge: true }
-      );
+      await setDoc(doc(db, 'users', user.uid, 'private', 'info'), payload, { merge: true });
       const recId = `cons_${crypto.randomUUID().replace(/-/g, '')}`;
       await setDoc(doc(db, 'consent_records', recId), {
         id: recId,
@@ -66,9 +77,10 @@ export function LegalComplianceView() {
       return;
     }
     try {
-      const [userSnap, profileSnap, resumesSnap, appsSnap] = await Promise.all([
+      const [userSnap, profileSnap, privateSnap, resumesSnap, appsSnap] = await Promise.all([
         getDoc(doc(db, 'users', user.uid)),
         getDoc(doc(db, 'profiles', user.uid)),
+        getDoc(doc(db, 'users', user.uid, 'private', 'info')),
         getDocs(query(collection(db, 'resumes'), where('userId', '==', user.uid))),
         getDocs(query(collection(db, 'applications'), where('candidateId', '==', user.uid))),
       ]);
@@ -78,6 +90,7 @@ export function LegalComplianceView() {
         lawReference: 'Rwanda Law N° 058/2021 (Right of Data Access & Portability)',
         account: userSnap.exists() ? userSnap.data() : null,
         profile: profileSnap.exists() ? profileSnap.data() : null,
+        privateInfo: privateSnap.exists() ? privateSnap.data() : null,
         resumes: resumesSnap.docs.map((d) => d.data()),
         applications: appsSnap.docs.map((d) => d.data()),
       };

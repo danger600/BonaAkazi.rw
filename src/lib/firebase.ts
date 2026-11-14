@@ -4,6 +4,7 @@ import { doc, getDocFromServer, getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
+export const firebaseProjectId = firebaseConfig.projectId;
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
@@ -36,11 +37,19 @@ export interface FirestoreErrorInfo {
   };
 }
 
+/**
+ * Logs a structured Firestore error without throwing.
+ *
+ * Throwing from here was unsafe because this helper is used as the error
+ * callback of realtime `onSnapshot` listeners and inside `catch` blocks. A
+ * throw there produced unhandled promise rejections / errors that crashed
+ * React trees instead of letting the UI show its own error state.
+ */
 export function handleFirestoreError(
   error: unknown,
   operationType: OperationTypeValue,
   path: string | null
-): never {
+): void {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -59,7 +68,6 @@ export function handleFirestoreError(
     path,
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
 }
 
 export async function testFirestoreConnection(): Promise<boolean> {

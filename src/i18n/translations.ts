@@ -23,6 +23,9 @@ export const TRANSLATIONS = {
       signedInAs: 'Winjiye nka',
       authRequiredTitle: 'Injira kugira ngo ukomeze',
       authRequiredDesc: 'Koresha konti ya Google kugira ngo ubike imyanya y\'akazi, wohereze dosiye, utegure CV cyangwa utangaze imirimo mu mutekano.',
+      copyHostname: 'Koporora domain',
+      copiedHostname: 'Byakoporowe',
+      openAuthorizedDomains: 'Fungura Authorized Domains',
     },
     hero: {
       eyebrow: 'Urubuga rw\'Imirimo, Amasoko & Iterambere ry\'Umwuga mu Rwanda',
@@ -140,7 +143,7 @@ export const TRANSLATIONS = {
     cv: {
       title: 'Itegura rya CV (CV Builder & Version History)',
       newCv: 'Kora CV Nshya',
-      uploadHint: 'Cyangwa pakira inyandiko ya CV (TXT/PDF/DOCX text) kugira ngo uyishyire muri sisitemu:',
+      uploadHint: 'Cyangwa pakira inyandiko ya CV (TXT, MD cyangwa CSV):',
       template: 'Imigaragarire (Template)',
       language: 'Ururimi rwa CV',
       fullName: 'Amazina Yose',
@@ -267,6 +270,9 @@ export const TRANSLATIONS = {
       signedInAs: 'Signed in as',
       authRequiredTitle: 'Sign in to continue',
       authRequiredDesc: 'Sign in with Google to save jobs, submit applications, build CVs, or post vacancies securely.',
+      copyHostname: 'Copy hostname',
+      copiedHostname: 'Copied',
+      openAuthorizedDomains: 'Open Authorized Domains',
     },
     hero: {
       eyebrow: 'Rwanda Employment, Procurement Tenders & Career Development Platform',
@@ -384,7 +390,7 @@ export const TRANSLATIONS = {
     cv: {
       title: 'CV Builder & Version History',
       newCv: 'Create New CV',
-      uploadHint: 'Or import CV text (TXT/PDF/DOCX extracted text) to populate the editor:',
+      uploadHint: 'Or import CV text (TXT, MD or CSV):',
       template: 'CV Template',
       language: 'CV Language',
       fullName: 'Full Name',
@@ -511,6 +517,9 @@ export const TRANSLATIONS = {
       signedInAs: 'Connecté en tant que',
       authRequiredTitle: 'Connectez-vous pour continuer',
       authRequiredDesc: 'Connectez-vous avec Google pour sauvegarder des offres, postuler, créer des CV ou publier des annonces.',
+      copyHostname: 'Copier le domaine',
+      copiedHostname: 'Copié',
+      openAuthorizedDomains: 'Ouvrir les domaines autorisés',
     },
     hero: {
       eyebrow: 'Plateforme d\'Emploi, Appels d\'Offres & Carrière au Rwanda',
@@ -628,7 +637,7 @@ export const TRANSLATIONS = {
     cv: {
       title: 'Créateur de CV & Historique des Versions',
       newCv: 'Nouveau CV',
-      uploadHint: 'Ou importez le texte de votre CV (TXT/PDF/DOCX) pour remplir l\'éditeur :',
+      uploadHint: 'Ou importez le texte de votre CV (TXT, MD ou CSV) :',
       template: 'Modèle de CV',
       language: 'Langue du CV',
       fullName: 'Nom Complet',

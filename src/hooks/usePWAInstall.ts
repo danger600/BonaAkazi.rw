@@ -39,15 +39,25 @@ export function usePWAInstall() {
   }, []);
 
   const install = async () => {
-    if (!deferredPrompt) return false;
-    await deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setIsInstalled(true);
+    const promptEvent = deferredPrompt;
+    if (!promptEvent) return false;
+
+    try {
+      await promptEvent.prompt();
+      const { outcome } = await promptEvent.userChoice;
+      if (outcome === 'accepted') {
+        setIsInstalled(true);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('PWA install prompt failed:', err);
+      return false;
+    } finally {
+      // beforeinstallprompt is single-use: drop it even after dismissal or failure
+      // so repeat clicks never throw InvalidStateError.
       setDeferredPrompt(null);
-      return true;
     }
-    return false;
   };
 
   return {

@@ -247,22 +247,38 @@ export function AdminDashboardView() {
 
   const handleUserRoleChange = async (targetUid: string, newRole: UserRole) => {
     const now = new Date().toISOString();
+    const adminRoles: UserRole[] = [
+      'admin',
+      'super_admin',
+      'finance_manager',
+      'recruitment_officer',
+      'moderator',
+    ];
+    const grantAdmin = adminRoles.includes(newRole);
+    // Removable admin grants live in two places (`users.role` and
+    // `admins/{uid}`). If an admin removed their own `users.role` while the
+    // admins doc still existed, the stale grant would keep them an admin.
+    // Handle that by removing the admins doc first and refusing self-demotion.
+    if (targetUid === user?.uid && !grantAdmin) {
+      setStatusBanner('Ntushobora kwikuraho uburenganzira bwa admin.');
+      return;
+    }
     try {
+      if (!grantAdmin) {
+        try {
+          await deleteDoc(doc(db, 'admins', targetUid));
+        } catch (err) {
+          // A missing admins doc is fine; anything else must abort before the
+          // role change so we never leave a stale admin grant behind.
+          if ((err as { code?: string }).code !== 'not-found') throw err;
+        }
+      }
       await updateDoc(doc(db, 'users', targetUid), {
         role: newRole,
         updatedAt: now,
       });
-      const adminRoles: UserRole[] = [
-        'admin',
-        'super_admin',
-        'finance_manager',
-        'recruitment_officer',
-        'moderator',
-      ];
-      if (adminRoles.includes(newRole)) {
+      if (grantAdmin) {
         await setDoc(doc(db, 'admins', targetUid), { role: newRole, updatedAt: now });
-      } else {
-        await deleteDoc(doc(db, 'admins', targetUid)).catch(() => {});
       }
       setStatusBanner(`Uruhare rw'ukoresha rwahinduwe ruba ${newRole}.`);
     } catch (err) {

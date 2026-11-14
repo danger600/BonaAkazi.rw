@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db, googleProvider, handleFirestoreError, OperationType, testFirestoreConnection } from '../lib/firebase.ts';
 import { checkBackendHealth, getWebSocketUrl } from '../lib/api.ts';
-import { mapFirebaseAuthError } from '../lib/authErrors.ts';
+import { extractFirebaseAuthCode, mapFirebaseAuthError } from '../lib/authErrors.ts';
 import { DEFAULT_PRICING_PACKAGES, SEED_COMPANIES, SEED_JOBS } from '../lib/rwandaData.ts';
 import type { AppTab, LanguageCode, NotificationItem, UserAccount, UserRole } from '../types.ts';
 
@@ -45,6 +45,7 @@ interface AppContextValue {
   signOutUser: () => Promise<void>;
   switchRole: (role: 'candidate' | 'employer') => Promise<void>;
   authError: string | null;
+  authErrorCode: string | null;
   clearAuthError: () => void;
 }
 
@@ -62,6 +63,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [wsConnected, setWsConnected] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authErrorCode, setAuthErrorCode] = useState<string | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
@@ -289,10 +291,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const signInWithGoogle = async () => {
     if (signingIn) return;
     setAuthError(null);
+    setAuthErrorCode(null);
     setSigningIn(true);
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err) {
+      setAuthErrorCode(extractFirebaseAuthCode(err) || null);
       setAuthError(mapFirebaseAuthError(err, language));
     } finally {
       setSigningIn(false);
@@ -306,6 +310,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const switchRole = async (role: 'candidate' | 'employer') => {
     if (!user || !userAccount) return;
     if (!user.emailVerified) {
+      setAuthErrorCode(null);
       setAuthError('Emeza imeyili ya konti yawe mbere yo guhindura uruhare.');
       return;
     }
@@ -343,7 +348,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         signOutUser,
         switchRole,
         authError,
-        clearAuthError: () => setAuthError(null),
+        authErrorCode,
+        clearAuthError: () => {
+          setAuthError(null);
+          setAuthErrorCode(null);
+        },
       }}
     >
       {children}
