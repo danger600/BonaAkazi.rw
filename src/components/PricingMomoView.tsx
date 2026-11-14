@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Lock, Receipt, RefreshCw, ShieldAlert } from 'lucide-react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
-import { apiFetch } from '../lib/api.ts';
+import { apiFetch, checkBackendHealth } from '../lib/api.ts';
 import { useApp } from '../contexts/AppContext.tsx';
 import { getT } from '../i18n/translations.ts';
 import { DEFAULT_PRICING_PACKAGES } from '../lib/rwandaData.ts';
@@ -47,20 +47,25 @@ export function PricingMomoView({ preselectedPackageId, preselectedTargetId }: P
 
   useEffect(() => {
     if (!user) return;
-    apiFetch<{ credentialsConfigured: boolean }>('/api/momo/config')
-      .then((res) => setCredentialsConfigured(res.credentialsConfigured))
-      .catch(() => {});
+    checkBackendHealth()
+      .then((health) => {
+        if (!health.ok) return;
+        apiFetch<{ credentialsConfigured: boolean }>('/api/momo/config')
+          .then((res) => setCredentialsConfigured(res.credentialsConfigured))
+          .catch(() => {});
 
-    apiFetch<{ payments: PaymentRecord[] }>('/api/momo/my-payments')
-      .then((res) => {
-        if (res.payments?.length) {
-          setPayments((prev) => {
-            const map = new Map<string, PaymentRecord>();
-            for (const p of prev) map.set(p.id, p);
-            for (const p of res.payments) map.set(p.id, p);
-            return Array.from(map.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-          });
-        }
+        apiFetch<{ payments: PaymentRecord[] }>('/api/momo/my-payments')
+          .then((res) => {
+            if (res.payments?.length) {
+              setPayments((prev) => {
+                const map = new Map<string, PaymentRecord>();
+                for (const p of prev) map.set(p.id, p);
+                for (const p of res.payments) map.set(p.id, p);
+                return Array.from(map.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+              });
+            }
+          })
+          .catch(() => {});
       })
       .catch(() => {});
 

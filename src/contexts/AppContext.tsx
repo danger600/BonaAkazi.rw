@@ -14,6 +14,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { auth, db, googleProvider, handleFirestoreError, OperationType, testFirestoreConnection } from '../lib/firebase.ts';
+import { checkBackendHealth, getWebSocketUrl } from '../lib/api.ts';
 import { mapFirebaseAuthError } from '../lib/authErrors.ts';
 import { DEFAULT_PRICING_PACKAGES, SEED_COMPANIES, SEED_JOBS } from '../lib/rwandaData.ts';
 import type { AppTab, LanguageCode, NotificationItem, UserAccount, UserRole } from '../types.ts';
@@ -76,16 +77,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // WebSocket client for real-time vacancy, application, and payment notifications
   useEffect(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    const wsUrl = getWebSocketUrl();
+    if (!wsUrl) return;
+
     let ws: WebSocket | null = null;
     let reconnectTimer: number | null = null;
     let disposed = false;
+    let everOpened = false;
+    let reconnectAttempts = 0;
 
     const connect = () => {
       if (disposed) return;
-      ws = new WebSocket(wsUrl);
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch {
+        return;
+      }
       ws.onopen = () => {
+        everOpened = true;
+        reconnectAttempts = 0;
         if (!disposed) setWsConnected(true);
       };
       ws.onmessage = (event) => {
@@ -103,12 +113,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ws.onclose = () => {
         if (!disposed) {
           setWsConnected(false);
-          reconnectTimer = window.setTimeout(connect, 5000);
+          // Only retry if this host actually established a WebSocket previously (avoid console spam)
+          if (everOpened && reconnectAttempts < 2) {
+            reconnectAttempts += 1;
+            reconnectTimer = window.setTimeout(connect, 5000);
+          }
         }
       };
     };
 
-    connect();
+    checkBackendHealth()
+      .then((health) => {
+        if (!disposed && health.ok && health.wsEnabled) {
+          connect();
+        }
+      })
+      .catch(() => {});
+
     return () => {
       disposed = true;
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
@@ -248,7 +269,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setLanguage = async (lang: LanguageCode) => {
     setLanguageState(lang);
-    if (user && userAccount) {
+    if (user && user.emailVerified && userAccount) {
       try {
         await updateDoc(doc(db, 'users', user.uid), {
           language: lang,

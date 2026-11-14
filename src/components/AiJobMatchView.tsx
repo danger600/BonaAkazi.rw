@@ -312,9 +312,13 @@ export function AiJobMatchView() {
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard?.writeText(coverLetter);
-                    setCopiedLetter(true);
-                    setTimeout(() => setCopiedLetter(false), 2000);
+                    navigator.clipboard
+                      ?.writeText(coverLetter)
+                      .then(() => {
+                        setCopiedLetter(true);
+                        setTimeout(() => setCopiedLetter(false), 2000);
+                      })
+                      .catch(() => {});
                   }}
                   className="px-2.5 py-1 text-xs font-semibold rounded border border-slate-300 dark:border-slate-700 inline-flex items-center gap-1"
                 >

@@ -22,8 +22,9 @@ import {
   where,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
-import { apiFetch } from '../lib/api.ts';
+import { apiFetch, checkBackendHealth, isBackendServerExpected, resolveApiUrl } from '../lib/api.ts';
 import { useApp } from '../contexts/AppContext.tsx';
+import heroKigaliImg from '../assets/images/hero_kigali_workspace_1794614730417.jpg';
 import { getT } from '../i18n/translations.ts';
 import { JOB_CATEGORIES, RWANDA_DISTRICTS, SEED_COMPANIES, SEED_JOBS } from '../lib/rwandaData.ts';
 import type {
@@ -128,8 +129,11 @@ export function JobBoardView() {
 
   useEffect(() => {
     let active = true;
-    fetch('/api/jobs/ingested')
-      .then((r) => (r.ok ? r.json() : null))
+    checkBackendHealth()
+      .then((health) => {
+        if (!active || !health.ok) return null;
+        return fetch(resolveApiUrl('/api/jobs/ingested')).then((r) => (r.ok ? r.json() : null));
+      })
       .then((data: { jobs?: JobListing[]; stats?: IngestionRunStats } | null) => {
         if (!active || !data) return;
         if (Array.isArray(data.jobs)) setIngestedJobs(data.jobs);
@@ -310,13 +314,15 @@ export function JobBoardView() {
         updatedAt: now,
       });
 
-      await apiFetch('/api/realtime/broadcast', {
-        method: 'POST',
-        body: JSON.stringify({
-          type: 'application:created',
-          payload: { jobTitle: applyModalJob.title, companyName: applyModalJob.companyName },
-        }),
-      }).catch(() => {});
+      if (isBackendServerExpected()) {
+        await apiFetch('/api/realtime/broadcast', {
+          method: 'POST',
+          body: JSON.stringify({
+            type: 'application:created',
+            payload: { jobTitle: applyModalJob.title, companyName: applyModalJob.companyName },
+          }),
+        }).catch(() => {});
+      }
 
       setApplyModalJob(null);
       setCoverLetter('');
@@ -385,16 +391,34 @@ export function JobBoardView() {
     e.preventDefault();
     setNewsletterErr(null);
     setNewsletterMsg(null);
+
+    const cleanEmail = newsletterEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setNewsletterErr('Shyiramo imeyili yemewe (urugero: izina@domain.rw).');
+      return;
+    }
+
     setNewsletterLoading(true);
     try {
-      const res = await fetch('/api/newsletter/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newsletterName, email: newsletterEmail }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error || 'Ntibyakunze kwiyandikisha.');
+      const health = await checkBackendHealth();
+      if (health.ok) {
+        const res = await fetch(resolveApiUrl('/api/newsletter/subscribe'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: newsletterName.trim(), email: cleanEmail }),
+        });
+        const ct = res.headers.get('content-type') || '';
+        const data = ct.includes('application/json') ? await res.json().catch(() => ({})) : {};
+        if (!res.ok) {
+          throw new Error(data.error || 'Ntibyakunze kwiyandikisha.');
+        }
+      } else {
+        // Persist locally when deployed purely as a static frontend
+        const key = 'bonaakazi_newsletter_subs';
+        const existing = JSON.parse(localStorage.getItem(key) || '[]') as string[];
+        if (!existing.includes(cleanEmail)) {
+          localStorage.setItem(key, JSON.stringify([...existing, cleanEmail].slice(0, 50)));
+        }
       }
       setNewsletterMsg(t.portalSections.newsletterSuccess);
       setNewsletterName('');
@@ -440,7 +464,7 @@ export function JobBoardView() {
 
           <div className="lg:col-span-5 relative min-h-[260px] lg:min-h-full bg-slate-900">
             <img
-              src="/src/assets/images/hero_kigali_workspace_1794614730417.jpg"
+              src={heroKigaliImg}
               alt="Kigali modern technology and recruitment workspace"
               referrerPolicy="no-referrer"
               className="w-full h-full lg:h-full object-cover"

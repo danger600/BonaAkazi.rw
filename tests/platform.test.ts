@@ -64,6 +64,24 @@ assert.equal(
 const rwClosed = mapFirebaseAuthError({ code: 'auth/popup-closed-by-user' }, 'rw');
 assert.equal(rwClosed, rwCancelled);
 assert.ok(mapFirebaseAuthError({ code: 'auth/popup-blocked' }, 'en').includes('popup'));
+assert.ok(
+  mapFirebaseAuthError({ code: 'auth/unauthorized-domain' }, 'rw').includes('Authorized domains'),
+  'auth/unauthorized-domain must provide actionable Authorized domains guidance'
+);
+
+// Verify zero hardcoded /src/assets/ string literals in component files (must be bundled via ES imports)
+for (const relPath of [
+  'src/components/JobBoardView.tsx',
+  'src/components/CvBuilderView.tsx',
+  'src/components/EmployerPortalView.tsx',
+]) {
+  const srcText = fs.readFileSync(relPath, 'utf8');
+  assert.equal(
+    srcText.includes('"/src/assets/'),
+    false,
+    `${relPath} must use static ES module imports instead of /src/assets/ paths`
+  );
+}
 
 // 7. Verify Automated Job Ingestion deduplication, district geo-tagging & salary normalization
 assert.equal(

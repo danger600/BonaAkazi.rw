@@ -5,7 +5,17 @@ import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
 import { apiFetch } from '../lib/api.ts';
 import { useApp } from '../contexts/AppContext.tsx';
 import { getT } from '../i18n/translations.ts';
+import featureCvReviewImg from '../assets/images/feature_cv_review_1794614731626.jpg';
 import type { LanguageCode, Resume } from '../types.ts';
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 export function CvBuilderView() {
   const { user, language, signInWithGoogle } = useApp();
@@ -213,12 +223,14 @@ export function CvBuilderView() {
             <button
               type="button"
               onClick={() => {
-                const html = `<html><head><meta charset="utf-8"><title>${fullName || 'CV'}</title></head><body style="font-family:sans-serif;padding:32px;"><h1>${fullName || 'Amazina'}</h1><p>${[location, phone, email].filter(Boolean).join(' · ')}</p><hr/><h3>${t.cv.summary}</h3><p>${summary.replace(/\n/g, '<br/>')}</p><h3>${t.cv.skills}</h3><p>${skillsText}</p><h3>${t.cv.experience}</h3><p>${experienceText.replace(/\n/g, '<br/>')}</p><h3>${t.cv.education}</h3><p>${educationText.replace(/\n/g, '<br/>')}</p></body></html>`;
+                const safeName = escapeHtml(fullName || 'Amazina');
+                const safeMeta = escapeHtml([location, phone, email].filter(Boolean).join(' · '));
+                const html = `<html><head><meta charset="utf-8"><title>${safeName}</title></head><body style="font-family:sans-serif;padding:32px;"><h1>${safeName}</h1><p>${safeMeta}</p><hr/><h3>${escapeHtml(t.cv.summary)}</h3><p>${escapeHtml(summary).replace(/\n/g, '<br/>')}</p><h3>${escapeHtml(t.cv.skills)}</h3><p>${escapeHtml(skillsText)}</p><h3>${escapeHtml(t.cv.experience)}</h3><p>${escapeHtml(experienceText).replace(/\n/g, '<br/>')}</p><h3>${escapeHtml(t.cv.education)}</h3><p>${escapeHtml(educationText).replace(/\n/g, '<br/>')}</p></body></html>`;
                 const blob = new Blob([html], { type: 'application/msword' });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `${(title || 'cv').toLowerCase().replace(/\s+/g, '-')}.doc`;
+                a.download = `${(title || 'cv').toLowerCase().replace(/[^a-z0-9-_]+/g, '-')}.doc`;
                 a.click();
                 URL.revokeObjectURL(url);
               }}
@@ -245,7 +257,7 @@ export function CvBuilderView() {
         </div>
         <div className="lg:col-span-4 min-h-[160px] bg-slate-100 dark:bg-slate-800">
           <img
-            src="/src/assets/images/feature_cv_review_1794614731626.jpg"
+            src={featureCvReviewImg}
             alt="Rwandan professional reviewing CV"
             referrerPolicy="no-referrer"
             className="w-full h-full lg:h-full object-cover"

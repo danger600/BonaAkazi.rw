@@ -11,9 +11,10 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
-import { apiFetch } from '../lib/api.ts';
+import { apiFetch, isBackendServerExpected } from '../lib/api.ts';
 import { useApp } from '../contexts/AppContext.tsx';
 import { getT } from '../i18n/translations.ts';
+import featureEmployerOfficeImg from '../assets/images/feature_employer_office_1794614731039.jpg';
 import { JOB_CATEGORIES, RWANDA_DISTRICTS } from '../lib/rwandaData.ts';
 import type {
   ApplicationStatus,
@@ -261,13 +262,15 @@ export function EmployerPortalView({ onRequestMomoCheckout }: EmployerPortalView
         };
         onRequestMomoCheckout(pkgMap[packageTier], jobId);
       } else {
-        await apiFetch('/api/realtime/broadcast', {
-          method: 'POST',
-          body: JSON.stringify({
-            type: 'vacancy:published',
-            payload: { jobId, title: newJob.title, companyName: newJob.companyName },
-          }),
-        }).catch(() => {});
+        if (isBackendServerExpected()) {
+          await apiFetch('/api/realtime/broadcast', {
+            method: 'POST',
+            body: JSON.stringify({
+              type: 'vacancy:published',
+              payload: { jobId, title: newJob.title, companyName: newJob.companyName },
+            }),
+          }).catch(() => {});
+        }
         setFeedback('Itangazo ryatangajwe ku rubuga rwa BonaAkazi.rw.');
       }
     } catch (err) {
@@ -372,7 +375,7 @@ export function EmployerPortalView({ onRequestMomoCheckout }: EmployerPortalView
         </div>
         <div className="lg:col-span-4 min-h-[150px] bg-slate-100 dark:bg-slate-800">
           <img
-            src="/src/assets/images/feature_employer_office_1794614731039.jpg"
+            src={featureEmployerOfficeImg}
             alt="Rwandan employer interview panel"
             referrerPolicy="no-referrer"
             className="w-full h-full lg:h-full object-cover"

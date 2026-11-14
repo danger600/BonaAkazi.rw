@@ -294,6 +294,7 @@ wss.on('connection', (socket) => {
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
+    wsEnabled: true,
     service: 'BonaAkazi.rw',
     momoMode: hasLiveMomoCredentials ? MOMO_TARGET_ENV : 'sandbox_awaiting_credentials',
     receiverMsisdn: RECEIVER_MSISDN,

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Download, RefreshCw, ShieldAlert, Users, Wallet } from 'lucide-react';
 import { collection, deleteDoc, doc, onSnapshot, orderBy, query, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../lib/firebase.ts';
-import { apiFetch } from '../lib/api.ts';
+import { apiFetch, checkBackendHealth, resolveApiUrl } from '../lib/api.ts';
 import { useApp } from '../contexts/AppContext.tsx';
 import { getT } from '../i18n/translations.ts';
 import { DEFAULT_PRICING_PACKAGES, SEED_COMPANIES, SEED_JOBS } from '../lib/rwandaData.ts';
@@ -75,17 +75,22 @@ export function AdminDashboardView() {
       (err) => handleFirestoreError(err, OperationType.LIST, 'fraud_reports')
     );
 
-    apiFetch<{ payments: PaymentRecord[]; auditLogs: AuditLog[] }>('/api/momo/ledger')
-      .then((res) => {
-        setServerPayments(res.payments || []);
-        setServerAuditLogs(res.auditLogs || []);
-      })
-      .catch(() => {});
+    checkBackendHealth()
+      .then((health) => {
+        if (!health.ok) return;
+        apiFetch<{ payments: PaymentRecord[]; auditLogs: AuditLog[] }>('/api/momo/ledger')
+          .then((res) => {
+            setServerPayments(res.payments || []);
+            setServerAuditLogs(res.auditLogs || []);
+          })
+          .catch(() => {});
 
-    fetch('/api/ingestion/status')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { stats?: IngestionRunStats } | null) => {
-        if (d?.stats) setIngestionStats(d.stats);
+        fetch(resolveApiUrl('/api/ingestion/status'))
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d: { stats?: IngestionRunStats } | null) => {
+            if (d?.stats) setIngestionStats(d.stats);
+          })
+          .catch(() => {});
       })
       .catch(() => {});
 
