@@ -1,0 +1,447 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerified() && (
+        request.auth.token.email == 'toxiccoderkiller@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidUserAccount(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'role', 'language', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'role', 'language', 'status', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 120
+        && data.role in ['candidate', 'employer', 'admin', 'super_admin', 'finance_manager', 'recruitment_officer', 'moderator']
+        && data.language in ['rw', 'en', 'fr']
+        && data.status in ['active', 'suspended']
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidPrivateInfo(data) {
+      return data.keys().hasAll(['uid', 'email', 'consentAccepted', 'consentUpdatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'phone', 'district', 'consentAccepted', 'consentUpdatedAt'])
+        && isValidId(data.uid)
+        && data.email is string && data.email.size() <= 254
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 32))
+        && (!('district' in data) || (data.district is string && data.district.size() <= 64))
+        && data.consentAccepted is bool
+        && data.consentUpdatedAt is string && data.consentUpdatedAt.size() <= 64;
+    }
+
+    function isValidProfile(data) {
+      return data.keys().hasAll(['userId', 'headline', 'summary', 'district', 'yearsExperience', 'availability', 'education', 'experience', 'skills', 'certifications', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'headline', 'summary', 'district', 'yearsExperience', 'availability', 'education', 'experience', 'skills', 'certifications', 'updatedAt'])
+        && isValidId(data.userId)
+        && data.headline is string && data.headline.size() <= 160
+        && data.summary is string && data.summary.size() <= 2500
+        && data.district is string && data.district.size() <= 64
+        && data.yearsExperience is int && data.yearsExperience >= 0 && data.yearsExperience <= 60
+        && data.availability in ['immediate', 'two_weeks', 'one_month', 'not_looking']
+        && data.education is list && data.education.size() <= 20
+        && data.experience is list && data.experience.size() <= 20
+        && data.skills is list && data.skills.size() <= 50
+        && data.certifications is list && data.certifications.size() <= 20
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidResume(data) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'language', 'template', 'fullName', 'summary', 'skills', 'experienceText', 'educationText', 'versionCount', 'versions', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'userId', 'title', 'language', 'template', 'fullName', 'email', 'phone', 'location', 'summary', 'skills', 'experienceText', 'educationText', 'versionCount', 'versions', 'aiFeedback', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.userId)
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 160
+        && data.language in ['rw', 'en', 'fr']
+        && data.template in ['executive', 'modern', 'minimal', 'tech', 'creative']
+        && data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 120
+        && (!('email' in data) || (data.email is string && data.email.size() <= 254))
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 32))
+        && (!('location' in data) || (data.location is string && data.location.size() <= 100))
+        && data.summary is string && data.summary.size() <= 3000
+        && data.skills is list && data.skills.size() <= 50
+        && data.experienceText is string && data.experienceText.size() <= 8000
+        && data.educationText is string && data.educationText.size() <= 4000
+        && data.versionCount is int && data.versionCount >= 1 && data.versionCount <= 100
+        && data.versions is list && data.versions.size() <= 20
+        && (!('aiFeedback' in data) || (data.aiFeedback is string && data.aiFeedback.size() <= 4000))
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidCompany(data) {
+      return data.keys().hasAll(['id', 'ownerId', 'name', 'sector', 'district', 'description', 'verificationStatus', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'ownerId', 'name', 'sector', 'district', 'website', 'tinNumber', 'description', 'verificationStatus', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.ownerId)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 160
+        && data.sector is string && data.sector.size() >= 2 && data.sector.size() <= 100
+        && data.district is string && data.district.size() >= 2 && data.district.size() <= 64
+        && (!('website' in data) || (data.website is string && data.website.size() <= 256))
+        && (!('tinNumber' in data) || (data.tinNumber is string && data.tinNumber.size() <= 32))
+        && data.description is string && data.description.size() <= 2000
+        && data.verificationStatus in ['pending', 'verified', 'rejected']
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidJobListing(data) {
+      return data.keys().hasAll(['id', 'companyId', 'companyName', 'ownerId', 'listingType', 'title', 'category', 'district', 'employmentType', 'deadline', 'description', 'requirements', 'packageTier', 'status', 'isFeatured', 'applicationsCount', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'companyId', 'companyName', 'ownerId', 'listingType', 'title', 'category', 'district', 'employmentType', 'experienceLevel', 'isPublicSector', 'publishedDate', 'salaryRange', 'deadline', 'description', 'requirements', 'packageTier', 'status', 'isFeatured', 'applicationsCount', 'sourceUrl', 'autoIngested', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.companyId)
+        && data.companyName is string && data.companyName.size() >= 1 && data.companyName.size() <= 160
+        && isValidId(data.ownerId)
+        && data.listingType in ['job', 'tender', 'consultancy', 'internship', 'scholarship', 'training', 'other']
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 180
+        && data.category is string && data.category.size() >= 2 && data.category.size() <= 80
+        && data.district is string && data.district.size() >= 2 && data.district.size() <= 64
+        && data.employmentType in ['full_time', 'part_time', 'remote', 'internship', 'contract']
+        && (!('experienceLevel' in data) || (data.experienceLevel in ['entry', 'mid', 'senior', 'executive', 'internship', 'unspecified']))
+        && (!('isPublicSector' in data) || data.isPublicSector is bool)
+        && (!('publishedDate' in data) || (data.publishedDate is string && data.publishedDate.size() <= 32))
+        && (!('salaryRange' in data) || (data.salaryRange is string && data.salaryRange.size() <= 100))
+        && data.deadline is string && data.deadline.size() <= 32
+        && data.description is string && data.description.size() >= 10 && data.description.size() <= 10000
+        && data.requirements is list && data.requirements.size() <= 30
+        && data.packageTier in ['standard', 'featured', 'premium', 'tender']
+        && data.status in ['draft', 'pending_payment', 'pending_review', 'published', 'closed', 'rejected']
+        && data.isFeatured is bool
+        && data.applicationsCount is int && data.applicationsCount >= 0
+        && (!('sourceUrl' in data) || (data.sourceUrl is string && data.sourceUrl.size() <= 512))
+        && (!('autoIngested' in data) || data.autoIngested is bool)
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidApplication(data) {
+      return data.keys().hasAll(['id', 'jobId', 'jobTitle', 'companyId', 'companyName', 'employerOwnerId', 'candidateId', 'candidateName', 'coverLetter', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'jobId', 'jobTitle', 'companyId', 'companyName', 'employerOwnerId', 'candidateId', 'candidateName', 'resumeId', 'coverLetter', 'atsScore', 'status', 'interviewDate', 'interviewNotes', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.jobId)
+        && data.jobTitle is string && data.jobTitle.size() >= 1 && data.jobTitle.size() <= 180
+        && isValidId(data.companyId)
+        && data.companyName is string && data.companyName.size() >= 1 && data.companyName.size() <= 160
+        && isValidId(data.employerOwnerId)
+        && isValidId(data.candidateId)
+        && data.candidateName is string && data.candidateName.size() >= 1 && data.candidateName.size() <= 120
+        && (!('resumeId' in data) || (data.resumeId is string && data.resumeId.size() <= 128))
+        && data.coverLetter is string && data.coverLetter.size() <= 6000
+        && (!('atsScore' in data) || (data.atsScore is int && data.atsScore >= 0 && data.atsScore <= 100))
+        && data.status in ['submitted', 'screening', 'shortlisted', 'interview', 'offered', 'rejected', 'withdrawn']
+        && (!('interviewDate' in data) || (data.interviewDate is string && data.interviewDate.size() <= 64))
+        && (!('interviewNotes' in data) || (data.interviewNotes is string && data.interviewNotes.size() <= 1000))
+        && data.createdAt is string && data.createdAt.size() <= 64
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidSavedJob(data) {
+      return data.keys().hasAll(['jobId', 'jobTitle', 'companyName', 'savedAt'])
+        && data.keys().hasOnly(['jobId', 'jobTitle', 'companyName', 'savedAt'])
+        && isValidId(data.jobId)
+        && data.jobTitle is string && data.jobTitle.size() >= 1 && data.jobTitle.size() <= 180
+        && data.companyName is string && data.companyName.size() >= 1 && data.companyName.size() <= 160
+        && data.savedAt is string && data.savedAt.size() <= 64;
+    }
+
+    function isValidJobAlert(data) {
+      return data.keys().hasAll(['id', 'keywords', 'category', 'district', 'frequency', 'createdAt'])
+        && data.keys().hasOnly(['id', 'keywords', 'category', 'district', 'frequency', 'createdAt'])
+        && isValidId(data.id)
+        && data.keywords is string && data.keywords.size() <= 120
+        && data.category is string && data.category.size() <= 80
+        && data.district is string && data.district.size() <= 64
+        && data.frequency in ['instant', 'daily', 'weekly']
+        && data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidPricingPackage(data) {
+      return data.keys().hasAll(['id', 'nameRw', 'nameEn', 'nameFr', 'audience', 'priceRwf', 'durationDays', 'active', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'nameRw', 'nameEn', 'nameFr', 'audience', 'priceRwf', 'durationDays', 'descriptionRw', 'descriptionEn', 'descriptionFr', 'active', 'updatedAt'])
+        && isValidId(data.id)
+        && data.nameRw is string && data.nameRw.size() <= 120
+        && data.nameEn is string && data.nameEn.size() <= 120
+        && data.nameFr is string && data.nameFr.size() <= 120
+        && data.audience in ['employer', 'candidate']
+        && data.priceRwf is int && data.priceRwf >= 0
+        && data.durationDays is int && data.durationDays >= 1 && data.durationDays <= 365
+        && data.active is bool
+        && data.updatedAt is string && data.updatedAt.size() <= 64;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['id', 'userId', 'type', 'title', 'message', 'read', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'type', 'title', 'message', 'read', 'linkTab', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.userId)
+        && data.type in ['vacancy', 'application', 'payment', 'deadline', 'system']
+        && data.title is string && data.title.size() <= 180
+        && data.message is string && data.message.size() <= 500
+        && data.read is bool
+        && data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['id', 'actorUid', 'action', 'resourceType', 'resourceId', 'details', 'createdAt'])
+        && data.keys().hasOnly(['id', 'actorUid', 'action', 'resourceType', 'resourceId', 'details', 'createdAt'])
+        && isValidId(data.id)
+        && data.actorUid is string && data.actorUid.size() <= 128
+        && data.action is string && data.action.size() <= 120
+        && data.resourceType is string && data.resourceType.size() <= 80
+        && data.resourceId is string && data.resourceId.size() <= 128
+        && data.details is string && data.details.size() <= 1000
+        && data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidFraudReport(data) {
+      return data.keys().hasAll(['id', 'reporterUid', 'targetType', 'targetId', 'reason', 'status', 'createdAt'])
+        && data.keys().hasOnly(['id', 'reporterUid', 'targetType', 'targetId', 'reason', 'status', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.reporterUid)
+        && data.targetType in ['job', 'company', 'user']
+        && data.targetId is string && data.targetId.size() <= 128
+        && data.reason is string && data.reason.size() >= 5 && data.reason.size() <= 1000
+        && data.status in ['open', 'investigating', 'resolved']
+        && data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    function isValidConsentRecord(data) {
+      return data.keys().hasAll(['id', 'userId', 'requestType', 'granted', 'status', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'requestType', 'granted', 'status', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.userId)
+        && data.requestType in ['consent', 'data_export', 'data_deletion']
+        && data.granted is bool
+        && data.status in ['recorded', 'pending', 'completed']
+        && data.createdAt is string && data.createdAt.size() <= 64;
+    }
+
+    match /admins/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isVerified() && isValidId(userId) && request.auth.uid == userId
+        && isValidUserAccount(incoming())
+        && incoming().uid == request.auth.uid
+        && incoming().role in ['candidate', 'employer']
+        && incoming().status == 'active';
+      allow update: if isVerified() && isValidId(userId) && isValidUserAccount(incoming()) && (
+        isAdmin() || (
+          request.auth.uid == userId
+          && incoming().uid == existing().uid
+          && incoming().role in ['candidate', 'employer']
+          && incoming().status == existing().status
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'role', 'language', 'updatedAt'])
+        )
+      );
+
+      match /private/{docId} {
+        allow get, list: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow create: if isVerified() && isValidId(userId) && isValidId(docId)
+          && request.auth.uid == userId
+          && isValidPrivateInfo(incoming())
+          && incoming().uid == request.auth.uid;
+        allow update: if isVerified() && isValidId(userId) && isValidId(docId)
+          && request.auth.uid == userId
+          && isValidPrivateInfo(incoming())
+          && incoming().uid == existing().uid
+          && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'phone', 'district', 'consentAccepted', 'consentUpdatedAt']);
+        allow delete: if isVerified() && (request.auth.uid == userId || isAdmin());
+      }
+
+      match /saved_jobs/{jobId} {
+        allow get, list: if isSignedIn() && request.auth.uid == userId;
+        allow create, update: if isVerified() && isValidId(userId) && isValidId(jobId)
+          && request.auth.uid == userId
+          && isValidSavedJob(incoming());
+        allow delete: if isVerified() && isValidId(jobId) && request.auth.uid == userId;
+      }
+
+      match /alerts/{alertId} {
+        allow get, list: if isSignedIn() && request.auth.uid == userId;
+        allow create, update: if isVerified() && isValidId(userId) && isValidId(alertId)
+          && request.auth.uid == userId
+          && isValidJobAlert(incoming());
+        allow delete: if isVerified() && isValidId(alertId) && request.auth.uid == userId;
+      }
+    }
+
+    match /profiles/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isVerified() && isValidId(userId) && request.auth.uid == userId
+        && isValidProfile(incoming()) && incoming().userId == request.auth.uid;
+      allow update: if isVerified() && isValidId(userId) && request.auth.uid == userId
+        && isValidProfile(incoming()) && incoming().userId == existing().userId;
+    }
+
+    match /resumes/{resumeId} {
+      allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(resumeId) && isValidResume(incoming())
+        && incoming().userId == request.auth.uid;
+      allow update: if isVerified() && isValidId(resumeId) && isValidResume(incoming())
+        && existing().userId == request.auth.uid
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt;
+      allow delete: if isVerified() && isValidId(resumeId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    match /companies/{companyId} {
+      allow get: if existing().verificationStatus == 'verified'
+        || (isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin()));
+      allow list: if resource.data.verificationStatus == 'verified'
+        || (isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin()));
+      allow create: if isVerified() && isValidId(companyId) && isValidCompany(incoming())
+        && (
+          isAdmin() || (
+            incoming().ownerId == request.auth.uid
+            && incoming().verificationStatus == 'pending'
+          )
+        );
+      allow update: if isVerified() && isValidId(companyId) && isValidCompany(incoming()) && (
+        isAdmin() || (
+          existing().ownerId == request.auth.uid
+          && incoming().ownerId == existing().ownerId
+          && incoming().verificationStatus == existing().verificationStatus
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'sector', 'district', 'website', 'tinNumber', 'description', 'updatedAt'])
+        )
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /jobs/{jobId} {
+      allow get: if existing().status == 'published'
+        || (isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin()));
+      allow list: if resource.data.status == 'published'
+        || (isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin()));
+      allow create: if isVerified() && isValidId(jobId) && isValidJobListing(incoming())
+        && (
+          isAdmin() || (
+            incoming().ownerId == request.auth.uid
+            && incoming().isFeatured == false
+            && incoming().applicationsCount == 0
+            && incoming().status in ['draft', 'pending_payment', 'pending_review', 'published']
+          )
+        );
+      allow update: if isVerified() && isValidId(jobId) && isValidJobListing(incoming()) && (
+        isAdmin() || (
+          existing().ownerId == request.auth.uid
+          && incoming().ownerId == existing().ownerId
+          && incoming().isFeatured == existing().isFeatured
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'category', 'district', 'employmentType', 'experienceLevel', 'isPublicSector', 'salaryRange', 'deadline', 'description', 'requirements', 'status', 'updatedAt'])
+        )
+      );
+      allow delete: if isVerified() && isValidId(jobId) && (existing().ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /applications/{applicationId} {
+      allow get: if isSignedIn() && (
+        existing().candidateId == request.auth.uid ||
+        existing().employerOwnerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.candidateId == request.auth.uid ||
+        resource.data.employerOwnerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isVerified() && isValidId(applicationId) && isValidApplication(incoming())
+        && incoming().candidateId == request.auth.uid
+        && incoming().status == 'submitted'
+        && exists(/databases/$(database)/documents/jobs/$(incoming().jobId));
+      allow update: if isVerified() && isValidId(applicationId) && isValidApplication(incoming()) && (
+        isAdmin() || (
+          existing().candidateId == request.auth.uid
+          && incoming().status == 'withdrawn'
+          && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+        ) || (
+          existing().employerOwnerId == request.auth.uid
+          && incoming().candidateId == existing().candidateId
+          && incoming().jobId == existing().jobId
+          && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'interviewDate', 'interviewNotes', 'updatedAt'])
+        )
+      );
+    }
+
+    match /payments/{paymentId} {
+      allow get: if isSignedIn() && (existing().payerUid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.payerUid == request.auth.uid || isAdmin());
+      allow create, update: if isAdmin();
+    }
+
+    match /pricing_config/{packageId} {
+      allow get: if existing().active == true || isAdmin();
+      allow list: if resource.data.active == true || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(notificationId) && isValidNotification(incoming())
+        && (incoming().userId == request.auth.uid || isAdmin());
+      allow update: if isVerified() && isValidId(notificationId) && isValidNotification(incoming())
+        && existing().userId == request.auth.uid
+        && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+    }
+
+    match /audit_logs/{logId} {
+      allow get, list: if isAdmin();
+      allow create: if isVerified() && isValidId(logId) && isValidAuditLog(incoming())
+        && incoming().actorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /fraud_reports/{reportId} {
+      allow get: if isSignedIn() && (existing().reporterUid == request.auth.uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isVerified() && isValidId(reportId) && isValidFraudReport(incoming())
+        && incoming().reporterUid == request.auth.uid
+        && incoming().status == 'open';
+      allow update: if isAdmin() && isValidId(reportId) && isValidFraudReport(incoming());
+    }
+
+    match /consent_records/{recordId} {
+      allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerified() && isValidId(recordId) && isValidConsentRecord(incoming())
+        && incoming().userId == request.auth.uid;
+      allow update: if isAdmin() && isValidId(recordId) && isValidConsentRecord(incoming());
+    }
+  }
+}

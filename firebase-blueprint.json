@@ -1,0 +1,341 @@
+{
+  "entities": {
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Core user account and role metadata (non-PII).",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "role": { "type": "string", "enum": ["candidate", "employer", "admin", "super_admin", "finance_manager", "recruitment_officer", "moderator"] },
+        "language": { "type": "string", "enum": ["rw", "en", "fr"] },
+        "status": { "type": "string", "enum": ["active", "suspended"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "role", "language", "status", "createdAt", "updatedAt"]
+    },
+    "UserPrivateInfo": {
+      "title": "UserPrivateInfo",
+      "description": "Isolated PII record protected by Rwanda Law N° 058/2021.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 254 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "district": { "type": "string", "maxLength": 64 },
+        "consentAccepted": { "type": "boolean" },
+        "consentUpdatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "consentAccepted", "consentUpdatedAt"]
+    },
+    "CandidateProfile": {
+      "title": "CandidateProfile",
+      "description": "Candidate professional profile, education, experience, skills, certifications.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "headline": { "type": "string", "maxLength": 160 },
+        "summary": { "type": "string", "maxLength": 2500 },
+        "district": { "type": "string", "maxLength": 64 },
+        "yearsExperience": { "type": "integer" },
+        "availability": { "type": "string", "enum": ["immediate", "two_weeks", "one_month", "not_looking"] },
+        "education": { "type": "array" },
+        "experience": { "type": "array" },
+        "skills": { "type": "array" },
+        "certifications": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "headline", "summary", "district", "yearsExperience", "availability", "education", "experience", "skills", "certifications", "updatedAt"]
+    },
+    "Resume": {
+      "title": "Resume",
+      "description": "Candidate CV document with template and version history.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "language": { "type": "string", "enum": ["rw", "en", "fr"] },
+        "template": { "type": "string", "enum": ["executive", "modern", "minimal", "tech", "creative"] },
+        "fullName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 254 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "location": { "type": "string", "maxLength": 100 },
+        "summary": { "type": "string", "maxLength": 3000 },
+        "skills": { "type": "array" },
+        "experienceText": { "type": "string", "maxLength": 8000 },
+        "educationText": { "type": "string", "maxLength": 4000 },
+        "versionCount": { "type": "integer" },
+        "versions": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "title", "language", "template", "fullName", "summary", "skills", "experienceText", "educationText", "versionCount", "versions", "createdAt", "updatedAt"]
+    },
+    "Company": {
+      "title": "Company",
+      "description": "Registered employer organization with verification workflow.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "sector": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "district": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "website": { "type": "string", "maxLength": 256 },
+        "tinNumber": { "type": "string", "maxLength": 32 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "verificationStatus": { "type": "string", "enum": ["pending", "verified", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "name", "sector", "district", "description", "verificationStatus", "createdAt", "updatedAt"]
+    },
+    "JobListing": {
+      "title": "JobListing",
+      "description": "Job vacancy, tender, consultancy, internship, scholarship, training, or public announcement.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "companyId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "companyName": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "listingType": { "type": "string", "enum": ["job", "tender", "consultancy", "internship", "scholarship", "training", "other"] },
+        "title": { "type": "string", "minLength": 3, "maxLength": 180 },
+        "category": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "district": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "employmentType": { "type": "string", "enum": ["full_time", "part_time", "remote", "internship", "contract"] },
+        "experienceLevel": { "type": "string", "enum": ["entry", "mid", "senior", "executive", "internship", "unspecified"] },
+        "isPublicSector": { "type": "boolean" },
+        "publishedDate": { "type": "string", "maxLength": 32 },
+        "salaryRange": { "type": "string", "maxLength": 100 },
+        "deadline": { "type": "string", "maxLength": 32 },
+        "description": { "type": "string", "minLength": 10, "maxLength": 10000 },
+        "requirements": { "type": "array" },
+        "packageTier": { "type": "string", "enum": ["standard", "featured", "premium", "tender"] },
+        "status": { "type": "string", "enum": ["draft", "pending_payment", "pending_review", "published", "closed", "rejected"] },
+        "isFeatured": { "type": "boolean" },
+        "applicationsCount": { "type": "integer" },
+        "sourceUrl": { "type": "string", "maxLength": 512 },
+        "autoIngested": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "companyId", "companyName", "ownerId", "listingType", "title", "category", "district", "employmentType", "deadline", "description", "requirements", "packageTier", "status", "isFeatured", "applicationsCount", "createdAt", "updatedAt"]
+    },
+    "JobApplication": {
+      "title": "JobApplication",
+      "description": "Candidate job application and recruitment pipeline state.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "jobId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "jobTitle": { "type": "string", "minLength": 1, "maxLength": 180 },
+        "companyId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "companyName": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "employerOwnerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "candidateId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "candidateName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "resumeId": { "type": "string", "maxLength": 128 },
+        "coverLetter": { "type": "string", "maxLength": 6000 },
+        "atsScore": { "type": "integer" },
+        "status": { "type": "string", "enum": ["submitted", "screening", "shortlisted", "interview", "offered", "rejected", "withdrawn"] },
+        "interviewDate": { "type": "string", "maxLength": 64 },
+        "interviewNotes": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "jobId", "jobTitle", "companyId", "companyName", "employerOwnerId", "candidateId", "candidateName", "coverLetter", "status", "createdAt", "updatedAt"]
+    },
+    "SavedJob": {
+      "title": "SavedJob",
+      "description": "Candidate bookmarked job.",
+      "type": "object",
+      "properties": {
+        "jobId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "jobTitle": { "type": "string", "minLength": 1, "maxLength": 180 },
+        "companyName": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "savedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["jobId", "jobTitle", "companyName", "savedAt"]
+    },
+    "JobAlert": {
+      "title": "JobAlert",
+      "description": "Candidate job alert subscription.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "keywords": { "type": "string", "maxLength": 120 },
+        "category": { "type": "string", "maxLength": 80 },
+        "district": { "type": "string", "maxLength": 64 },
+        "frequency": { "type": "string", "enum": ["instant", "daily", "weekly"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "keywords", "category", "district", "frequency", "createdAt"]
+    },
+    "PaymentRecord": {
+      "title": "PaymentRecord",
+      "description": "MTN MoMo Rwanda collection ledger record (server-authoritative verification).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "referenceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "payerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "payerMsisdn": { "type": "string", "minLength": 9, "maxLength": 20 },
+        "receiverMsisdn": { "type": "string", "minLength": 9, "maxLength": 20 },
+        "amountRwf": { "type": "integer" },
+        "currency": { "type": "string", "enum": ["RWF", "EUR"] },
+        "serviceType": { "type": "string", "maxLength": 80 },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["pending", "successful", "failed", "refunded"] },
+        "environment": { "type": "string", "enum": ["sandbox", "production"] },
+        "receiptNumber": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "referenceId", "payerUid", "payerMsisdn", "receiverMsisdn", "amountRwf", "currency", "serviceType", "status", "environment", "createdAt", "updatedAt"]
+    },
+    "PricingPackage": {
+      "title": "PricingPackage",
+      "description": "Admin-configurable employer and optional candidate SaaS packages.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "nameRw": { "type": "string", "maxLength": 120 },
+        "nameEn": { "type": "string", "maxLength": 120 },
+        "nameFr": { "type": "string", "maxLength": 120 },
+        "audience": { "type": "string", "enum": ["employer", "candidate"] },
+        "priceRwf": { "type": "integer" },
+        "durationDays": { "type": "integer" },
+        "descriptionRw": { "type": "string", "maxLength": 400 },
+        "descriptionEn": { "type": "string", "maxLength": 400 },
+        "descriptionFr": { "type": "string", "maxLength": 400 },
+        "active": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "nameRw", "nameEn", "nameFr", "audience", "priceRwf", "durationDays", "active", "updatedAt"]
+    },
+    "NotificationItem": {
+      "title": "NotificationItem",
+      "description": "Real-time notification record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "type": { "type": "string", "enum": ["vacancy", "application", "payment", "deadline", "system"] },
+        "title": { "type": "string", "maxLength": 180 },
+        "message": { "type": "string", "maxLength": 500 },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "type", "title", "message", "read", "createdAt"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Immutable security and compliance audit trail.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "action": { "type": "string", "maxLength": 120 },
+        "resourceType": { "type": "string", "maxLength": 80 },
+        "resourceId": { "type": "string", "maxLength": 128 },
+        "details": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "actorUid", "action", "resourceType", "resourceId", "details", "createdAt"]
+    },
+    "FraudReport": {
+      "title": "FraudReport",
+      "description": "User-submitted fraud or suspicious vacancy report.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "reporterUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "targetType": { "type": "string", "enum": ["job", "company", "user"] },
+        "targetId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "reason": { "type": "string", "minLength": 5, "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["open", "investigating", "resolved"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "reporterUid", "targetType", "targetId", "reason", "status", "createdAt"]
+    },
+    "ConsentRecord": {
+      "title": "ConsentRecord",
+      "description": "Rwanda Law N° 058/2021 privacy consent, data export, or deletion request.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "requestType": { "type": "string", "enum": ["consent", "data_export", "data_deletion"] },
+        "granted": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["recorded", "pending", "completed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "requestType", "granted", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "User role and language preferences"
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Isolated PII document for user"
+    },
+    "/users/{userId}/saved_jobs/{jobId}": {
+      "schema": { "$ref": "#/entities/SavedJob" },
+      "description": "Candidate saved vacancies"
+    },
+    "/users/{userId}/alerts/{alertId}": {
+      "schema": { "$ref": "#/entities/JobAlert" },
+      "description": "Candidate job alert subscriptions"
+    },
+    "/profiles/{userId}": {
+      "schema": { "$ref": "#/entities/CandidateProfile" },
+      "description": "Candidate professional profile"
+    },
+    "/resumes/{resumeId}": {
+      "schema": { "$ref": "#/entities/Resume" },
+      "description": "Candidate CVs and version history"
+    },
+    "/companies/{companyId}": {
+      "schema": { "$ref": "#/entities/Company" },
+      "description": "Employer organizations"
+    },
+    "/jobs/{jobId}": {
+      "schema": { "$ref": "#/entities/JobListing" },
+      "description": "Job vacancies, tenders, scholarships, and training"
+    },
+    "/applications/{applicationId}": {
+      "schema": { "$ref": "#/entities/JobApplication" },
+      "description": "Job applications and recruitment pipeline"
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/PaymentRecord" },
+      "description": "MTN MoMo payment ledger"
+    },
+    "/pricing_config/{packageId}": {
+      "schema": { "$ref": "#/entities/PricingPackage" },
+      "description": "Admin-configurable monetization packages"
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/NotificationItem" },
+      "description": "Real-time user notifications"
+    },
+    "/audit_logs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Immutable security and admin audit trail"
+    },
+    "/fraud_reports/{reportId}": {
+      "schema": { "$ref": "#/entities/FraudReport" },
+      "description": "Fraud and moderation reports"
+    },
+    "/consent_records/{recordId}": {
+      "schema": { "$ref": "#/entities/ConsentRecord" },
+      "description": "Law N° 058/2021 consent and data rights requests"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "JOBINRWANDA.COM",
+  "description": "Urubuga rw'imirimo, amasoko ya Leta n'abikorera, itegura rya CV na AI Job Match mu Rwanda (Kinyarwanda, English, Français).",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
